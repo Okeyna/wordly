@@ -18,9 +18,48 @@ const showPlaceholder = (message = "Enter a word above to see its definition, pr
     showMessage(message);
 };
 
-const createResultCard = ({ word, phonetic, partOfSpeech, definition, synonyms, antonyms }) => {
+const getPhoneticText = (entry) => {
+    if (entry.phonetic) {
+        return entry.phonetic;
+    }
+
+    if (Array.isArray(entry.phonetics)) {
+        const firstText = entry.phonetics.find((item) => item.text && item.text.trim());
+        return firstText ? firstText.text : "N/A";
+    }
+
+    return "N/A";
+};
+
+const getAudioUrl = (entry) => {
+    if (!Array.isArray(entry.phonetics)) {
+        return null;
+    }
+
+    const phoneticWithAudio = entry.phonetics.find((item) => item.audio && item.audio.trim());
+    return phoneticWithAudio ? phoneticWithAudio.audio : null;
+};
+
+const playAudio = (url) => {
+    if (!url) {
+        return;
+    }
+
+    const normalizedUrl = url.startsWith("//") ? `https:${url}` : url;
+    const audio = new Audio(normalizedUrl);
+
+    audio.play().catch((error) => {
+        console.error("Audio playback failed:", error);
+    });
+};
+
+const createResultCard = ({ word, phonetic, audioUrl, partOfSpeech, definition, synonyms, antonyms }) => {
     const card = document.createElement("article");
     card.className = "word-card";
+
+    const audioButtonMarkup = audioUrl
+        ? `<button type="button" class="audio-btn" data-audio-url="${audioUrl}" aria-label="Play pronunciation">🔊</button>`
+        : "";
 
     card.innerHTML = `
         <div class="word-header">
@@ -28,12 +67,20 @@ const createResultCard = ({ word, phonetic, partOfSpeech, definition, synonyms, 
                 <h2>${word}</h2>
                 <p class="part-of-speech">${partOfSpeech}</p>
             </div>
-            <span class="pronunciation">${phonetic || "N/A"}</span>
+            <div class="word-header-right">
+                <span class="pronunciation">${phonetic || "N/A"}</span>
+                ${audioButtonMarkup}
+            </div>
         </div>
         <p><strong>Definition:</strong> ${definition}</p>
         <p><strong>Synonyms:</strong> ${synonyms}</p>
         <p><strong>Antonyms:</strong> ${antonyms}</p>
     `;
+
+    const audioButton = card.querySelector(".audio-btn");
+    if (audioButton) {
+        audioButton.addEventListener("click", () => playAudio(audioButton.dataset.audioUrl));
+    }
 
     return card;
 };
@@ -47,7 +94,10 @@ const renderResults = (entries) => {
     }
 
     entries.forEach((entry) => {
-        const { word, phonetic, meanings } = entry;
+        const phoneticText = getPhoneticText(entry);
+        const audioUrl = getAudioUrl(entry);
+
+        const { word, meanings } = entry;
 
         meanings.forEach((meaning) => {
             const { partOfSpeech, definitions, antonyms, synonyms } = meaning;
@@ -58,7 +108,8 @@ const renderResults = (entries) => {
                 const definitionText = definitionObject.definition;
                 const card = createResultCard({
                     word,
-                    phonetic,
+                    phonetic: phoneticText,
+                    audioUrl,
                     partOfSpeech,
                     definition: definitionText,
                     synonyms: synonymsText,
